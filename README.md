@@ -1,5 +1,7 @@
 # 🪽 Gott-Zentrale
 
+Status: Live ✅
+
 **Zentrale göttlicher Systemarchitektur.** Code, Infrastruktur, Automatisierung und Macht vereint.
 
 [![CI](https://img.shields.io/badge/CI-GitHub%20Actions-informational)](#)
