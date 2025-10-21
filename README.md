@@ -1,6 +1,8 @@
 # 🪽 Gott-Zentrale
 
 Status: Live ✅
+![CI](https://github.com/BerlinerTimi/gott-zentrale/actions/workflows/ci.yml/badge.svg)
+
 
 **Zentrale göttlicher Systemarchitektur.** Code, Infrastruktur, Automatisierung und Macht vereint.
 
