@@ -1,34 +1,74 @@
 name: CI (Node TS)
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Install (skip if no package.json)
+
+      - name: Install
         run: |
-          if [ -f package.json ]; then npm ci || npm i; else echo "no package.json"; fi
-      - name: Type check (optional)
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm i
+          fi
+
+      - name: Type check
         run: |
-          if [ -f tsconfig.json ]; then npx tsc -v && npx tsc --noEmit || true; else echo "no tsconfig"; fi
+          if [ -f tsconfig.json ]; then
+            npx tsc --noEmit
+          else
+            echo "no tsconfig.json found, skipping type-check"
+          fi
+
+      - name: Build
+        run: |
+          if npm run --silent build 2>/dev/null; then
+            echo "build ok"
+          else
+            echo "no build script, skipping"
+          fi
+
+      # ---- Discord Notify (mit Debug-Output) ----
       - name: Notify Discord (result)
         if: always()
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           STATUS: ${{ job.status }}
+          WF: ${{ github.workflow }}
+          BRANCH: ${{ github.ref_name }}
+          SHA7: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          TIMESTAMP: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.event.repository.updated_at }}
         run: |
           COLOR=$([ "$STATUS" = "success" ] && echo 3066993 || echo 15158332)
+
           cat > payload.json <<EOF
-          { "embeds": [{
-              "title":"⚙️ CI $STATUS",
-              "description":"**${{ github.workflow }}** auf **${{ github.ref_name }}**",
+          {
+            "embeds": [{
+              "title": "⚙️ CI $STATUS",
+              "description": "**$WF** auf **$BRANCH**\\nCommit: \`${SHA7:0:7}\` von **$ACTOR** in **$REPO**",
               "color": $COLOR,
-              "timestamp":"${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}"
-          }]}
+              "timestamp": "$TIMESTAMP"
+            }]
+          }
           EOF
-          curl -H "Content-Type: application/json" -d @payload.json "$DISCORD_WEBHOOK"
+
+          # Debug: zeige an, ob Secret gesetzt ist (ohne URL zu leaken)
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "::error::DISCORD_WEBHOOK Secret ist LEER_
