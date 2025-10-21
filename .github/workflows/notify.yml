@@ -12,46 +12,31 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Build message
-        id: msg
+      - name: Build payload
+        env:
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title || '' }}
+          PR_MERGED: ${{ github.event.pull_request.merged || 'false' }}
+          TS: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.event.release.published_at || github.event.repository.updated_at }}
         run: |
-          EVENT="${{ github.event_name }}"
-          REPO="${{ github.repository }}"
-          ACTOR="${{ github.actor }}"
-          BRANCH="${{ github.ref_name }}"
-          SHA="${{ github.sha }}"
-          PR_TITLE="${{ github.event.pull_request.title || '' }}"
-          PR_MERGED="${{ github.event.pull_request.merged || 'false' }}"
-
           if [ "$EVENT" = "push" ]; then
-            TITLE="📦 Push auf $BRANCH"
-            DESC="Commit: \`${SHA::7}\` von **$ACTOR** in **$REPO**"
-            COLOR=3066993
+            TITLE="📦 Push auf $BRANCH"; DESC="Commit: \`${SHA:0:7}\` von **$ACTOR** in **$REPO**"; COLOR=3066993
           elif [ "$EVENT" = "pull_request" ]; then
-            if [ "$PR_MERGED" = "true" ]; then
-              TITLE="🔀 PR gemerged"
-              COLOR=3447003
-            elif [ "${{ github.event.action }}" = "closed" ]; then
-              TITLE="❌ PR geschlossen"
-              COLOR=15158332
-            else
-              TITLE="🛠️ Pull Request: $PR_TITLE"
-              COLOR=15844367
-            fi
+            if [ "$PR_MERGED" = "true" ]; then TITLE="🔀 PR gemerged"; COLOR=3447003
+            elif [ "${{ github.event.action }}" = "closed" ]; then TITLE="❌ PR geschlossen"; COLOR=15158332
+            else TITLE="🛠️ Pull Request: $PR_TITLE"; COLOR=15844367; fi
             DESC="Branch: **$BRANCH** · Autor: **$ACTOR**"
           elif [ "$EVENT" = "release" ]; then
-            TITLE="🚀 Release veröffentlicht"
-            DESC="Tag: **${{ github.event.release.tag_name }}** · von **$ACTOR**"
-            COLOR=10181046
+            TITLE="🚀 Release veröffentlicht"; DESC="Tag: **${{ github.event.release.tag_name }}** · von **$ACTOR**"; COLOR=10181046
           else
-            TITLE="ℹ️ Event: $EVENT"
-            DESC="Repo: **$REPO**"
-            COLOR=9807270
+            TITLE="ℹ️ Event: $EVENT"; DESC="Repo: **$REPO**"; COLOR=9807270
           fi
-
           cat > payload.json <<EOF
-          {
-            "embeds": [{
+          { "embeds": [{
               "title": "$TITLE",
               "description": "$DESC",
               "color": $COLOR,
@@ -60,14 +45,17 @@ jobs:
                 {"name":"Branch","value":"$BRANCH","inline":true},
                 {"name":"Actor","value":"$ACTOR","inline":true}
               ],
-              "timestamp": "${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.event.release.published_at || github.event.repository.updated_at }}"
-            }]
-          }
+              "timestamp": "$TS"
+          }]}
           EOF
+
       - name: Send to Discord
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          WEBHOOK: ${{ secrets.WebHook }}   # <-- Secret-Name hier!
         run: |
-          curl -H "Content-Type: application/json" \
-               -d @payload.json \
-               "$DISCORD_WEBHOOK"
+          if [ -z "$WEBHOOK" ]; then
+            echo "::error::Secret 'WebHook' ist leer/nicht gesetzt."; exit 0; fi
+          CODE=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -H "Content-Type: application/json" -d @payload.json "$WEBHOOK")
+          echo "Discord HTTP: $CODE"
+          echo "Resp body:"; cat /tmp/resp.txt || true
+          exit 0
