@@ -26,7 +26,7 @@ jobs:
           if [ "$EVENT" = "push" ]; then
             TITLE="📦 Push auf $BRANCH"
             DESC="Commit: \`${SHA::7}\` von **$ACTOR** in **$REPO**"
-            COLOR=3066993   # grünlich
+            COLOR=3066993
           elif [ "$EVENT" = "pull_request" ]; then
             if [ "$PR_MERGED" = "true" ]; then
               TITLE="🔀 PR gemerged"
@@ -49,7 +49,6 @@ jobs:
             COLOR=9807270
           fi
 
-          # JSON in Datei schreiben (sauber escapen)
           cat > payload.json <<EOF
           {
             "embeds": [{
