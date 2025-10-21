@@ -1,4 +1,4 @@
-name: CI (Node TS)
+name: CI Logs (Node TS → LogHook)
 
 on:
   push:
@@ -25,16 +25,17 @@ jobs:
 
       - name: Type check
         run: |
-          if [ -f tsconfig.json ] ; then npx tsc --noEmit ; else echo "no tsconfig.json"; fi
+          if [ -f tsconfig.json ]; then npx tsc --noEmit; else echo "no tsconfig.json"; fi
 
       - name: Build
         run: |
           if npm run --silent build 2>/dev/null; then echo "build ok"; else echo "no build script"; fi
 
-      - name: Notify Discord (result)
+      # ---- Discord LogHook Notify ----
+      - name: Notify LogHook (build result)
         if: always()
         env:
-          WEBHOOK: ${{ secrets.WebHook }}   # <-- Secret-Name hier!
+          WEBHOOK: ${{ secrets.LogHook }}   # <- Log-Kanal
           STATUS: ${{ job.status }}
           WF: ${{ github.workflow }}
           BRANCH: ${{ github.ref_name }}
@@ -43,19 +44,19 @@ jobs:
           ACTOR: ${{ github.actor }}
           TS: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.event.repository.updated_at }}
         run: |
-          if [ -z "$WEBHOOK" ]; then
-            echo "::error::Secret 'WebHook' ist leer/nicht gesetzt."; exit 0
-          fi
+          [ -z "$WEBHOOK" ] && echo "::error::Secret 'LogHook' fehlt" && exit 0
           COLOR=$([ "$STATUS" = "success" ] && echo 3066993 || echo 15158332)
           cat > payload.json <<EOF
           { "embeds": [{
               "title": "⚙️ CI $STATUS",
-              "description": "**$WF** auf **$BRANCH**\\nCommit: \`${SHA7:0:7}\` von **$ACTOR** in **$REPO**",
+              "description": "**$WF** auf **$BRANCH**\\nCommit: \`${SHA7:0:7}\` von **$ACTOR**",
               "color": $COLOR,
+              "fields": [
+                {"name":"Repo","value":"$REPO","inline":true},
+                {"name":"Branch","value":"$BRANCH","inline":true},
+                {"name":"Actor","value":"$ACTOR","inline":true}
+              ],
               "timestamp": "$TS"
           }]}
           EOF
-          CODE=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -H "Content-Type: application/json" -d @payload.json "$WEBHOOK")
-          echo "Discord HTTP: $CODE"
-          echo "Resp body:"; cat /tmp/resp.txt || true
-          exit 0
+          curl -s -H "Content-Type: application/json" -d @payload.json "$WEBHOOK" -o /dev/null -w "HTTP:%{http_code}\n"
