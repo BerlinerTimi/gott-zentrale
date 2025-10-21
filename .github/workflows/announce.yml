@@ -1,0 +1,55 @@
+name: Announce (manual + release → WebHook)
+
+on:
+  # manueller Start über Actions-Tab
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Nachricht für den Hauptkanal"
+        required: true
+        type: string
+  # optional automatisch bei echten Releases
+  release:
+    types: [published]
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Build payload
+        id: build
+        env:
+          EVENT: ${{ github.event_name }}
+          MSG: ${{ inputs.message }}
+          TAG: ${{ github.event.release.tag_name }}
+          NAME: ${{ github.event.release.name }}
+          AUTHOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            cat > payload.json <<EOF
+            { "embeds": [{
+                "title": "📣 Ankündigung",
+                "description": "${MSG}",
+                "color": 15844367,
+                "footer": {"text":"$REPO"}
+            }]}
+            EOF
+          else
+            cat > payload.json <<EOF
+            { "embeds": [{
+                "title": "🚀 Release ${TAG}",
+                "description": "${NAME}\nAutor: **${AUTHOR}**",
+                "color": 10181046,
+                "footer": {"text":"$REPO"}
+            }]}
+            EOF
+          fi
+
+      - name: Send to WebHook (Hauptkanal)
+        env:
+          WEBHOOK: ${{ secrets.WebHook }}   # <- Hauptkanal
+        run: |
+          [ -z "$WEBHOOK" ] && echo "::error::Secret 'WebHook' fehlt" && exit 0
+          curl -s -H "Content-Type: application/json" -d @payload.json "$WEBHOOK" -o /dev/null -w "HTTP:%{http_code}\n"
