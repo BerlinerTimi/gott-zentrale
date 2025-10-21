@@ -21,54 +21,41 @@ jobs:
 
       - name: Install
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm i
-          fi
+          if [ -f package-lock.json ]; then npm ci; else npm i; fi
 
       - name: Type check
         run: |
-          if [ -f tsconfig.json ]; then
-            npx tsc --noEmit
-          else
-            echo "no tsconfig.json found, skipping type-check"
-          fi
+          if [ -f tsconfig.json ] ; then npx tsc --noEmit ; else echo "no tsconfig.json"; fi
 
       - name: Build
         run: |
-          if npm run --silent build 2>/dev/null; then
-            echo "build ok"
-          else
-            echo "no build script, skipping"
-          fi
+          if npm run --silent build 2>/dev/null; then echo "build ok"; else echo "no build script"; fi
 
-      # ---- Discord Notify (mit Debug-Output) ----
       - name: Notify Discord (result)
         if: always()
         env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          WEBHOOK: ${{ secrets.WebHook }}   # <-- Secret-Name hier!
           STATUS: ${{ job.status }}
           WF: ${{ github.workflow }}
           BRANCH: ${{ github.ref_name }}
           SHA7: ${{ github.sha }}
           REPO: ${{ github.repository }}
           ACTOR: ${{ github.actor }}
-          TIMESTAMP: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.event.repository.updated_at }}
+          TS: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.event.repository.updated_at }}
         run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::error::Secret 'WebHook' ist leer/nicht gesetzt."; exit 0
+          fi
           COLOR=$([ "$STATUS" = "success" ] && echo 3066993 || echo 15158332)
-
           cat > payload.json <<EOF
-          {
-            "embeds": [{
+          { "embeds": [{
               "title": "⚙️ CI $STATUS",
               "description": "**$WF** auf **$BRANCH**\\nCommit: \`${SHA7:0:7}\` von **$ACTOR** in **$REPO**",
               "color": $COLOR,
-              "timestamp": "$TIMESTAMP"
-            }]
-          }
+              "timestamp": "$TS"
+          }]}
           EOF
-
-          # Debug: zeige an, ob Secret gesetzt ist (ohne URL zu leaken)
-          if [ -z "$DISCORD_WEBHOOK" ]; then
-            echo "::error::DISCORD_WEBHOOK Secret ist LEER_
+          CODE=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -H "Content-Type: application/json" -d @payload.json "$WEBHOOK")
+          echo "Discord HTTP: $CODE"
+          echo "Resp body:"; cat /tmp/resp.txt || true
+          exit 0
