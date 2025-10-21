@@ -1,0 +1,34 @@
+name: CI (Node TS)
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install (skip if no package.json)
+        run: |
+          if [ -f package.json ]; then npm ci || npm i; else echo "no package.json"; fi
+      - name: Type check (optional)
+        run: |
+          if [ -f tsconfig.json ]; then npx tsc -v && npx tsc --noEmit || true; else echo "no tsconfig"; fi
+      - name: Notify Discord (result)
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          STATUS: ${{ job.status }}
+        run: |
+          COLOR=$([ "$STATUS" = "success" ] && echo 3066993 || echo 15158332)
+          cat > payload.json <<EOF
+          { "embeds": [{
+              "title":"⚙️ CI $STATUS",
+              "description":"**${{ github.workflow }}** auf **${{ github.ref_name }}**",
+              "color": $COLOR,
+              "timestamp":"${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}"
+          }]}
+          EOF
+          curl -H "Content-Type: application/json" -d @payload.json "$DISCORD_WEBHOOK"
